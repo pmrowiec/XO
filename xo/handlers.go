@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -10,68 +9,65 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func GameGetState(w http.ResponseWriter, r *http.Request) {
+func WriteResponse(w http.ResponseWriter, responseObj interface{}, httpStatus int) {
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(httpStatus)
+	if err := json.NewEncoder(w).Encode(responseObj); err != nil {
+		panic(err)
+	}
+}
+
+func ReadRequest(r *http.Request) []byte {
+	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 500))
+	if err != nil {
+		panic(err)
+	}
+	if err := r.Body.Close(); err != nil {
+		panic(err)
+	}
+	return body
+}
+
+func GetGameContext(r *http.Request) *Game {
 	vars := mux.Vars(r)
 	gameId := vars["gameId"]
-	g := FindGame(gameId)
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(GetGameState(*g)); err != nil {
-		panic(err)
+	return FindGame(gameId)
+}
+
+func GameGetState(w http.ResponseWriter, r *http.Request) {
+	game := GetGameContext(r)
+	if game == nil {
+		WriteResponse(w, nil, http.StatusNotFound)
+	} else {
+		WriteResponse(w, game.GetGameState(), http.StatusFound)
 	}
 }
 
 func GameCreate(w http.ResponseWriter, r *http.Request) {
 	var gameSettings GameStart
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
-	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
-	}
-	if err := json.Unmarshal(body, &gameSettings); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
-		}
+	body := ReadRequest(r)
+	if err := json.Unmarshal(body, &gameSettings); err != nil || !gameSettings.Validate() {
+		WriteResponse(w, "Invalid game settings", http.StatusUnprocessableEntity)
+		return
 	}
 
-	newGame := CreateGame(gameSettings)
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(GetGameState(newGame)); err != nil {
-		panic(err)
-	}
+	newGame := AddGame(gameSettings)
+	WriteResponse(w, newGame.GetGameState(), http.StatusCreated)
 }
 
 func GameMakeMove(w http.ResponseWriter, r *http.Request) {
 	var move GameMove
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
-	if err != nil {
-		panic(err)
+	body := ReadRequest(r)
+	if err := json.Unmarshal(body, &move); err != nil || !move.Validate() {
+		WriteResponse(w, "Invalid move", http.StatusUnprocessableEntity)
+		return
 	}
-	if err := r.Body.Close(); err != nil {
-		panic(err)
+	game := GetGameContext(r)
+	if game == nil {
+		WriteResponse(w, nil, http.StatusNotFound)
+		return
 	}
-	if err := json.Unmarshal(body, &move); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
-		}
-	}
-	game := FindGame(move.GameId)
-	fmt.Println("Next player is", game.NextPlayer)
-	winningMove := MakeMove(move.X, move.Y, game, move.PlayerId)
-	if winningMove == true {
-		game.Winner = game.NextPlayer
-		game.Completed = true
-	}
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(GetGameState(*game)); err != nil {
-		panic(err)
-	}
+
+	game.Move(move.X, move.Y, move.PlayerId)
+	WriteResponse(w, game.GetGameState(), http.StatusOK)
 }

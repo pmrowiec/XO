@@ -21,7 +21,7 @@ var routes = Routes{
 	Route{
 		"GameMakeMove",
 		"POST",
-		"/game/move",
+		"/game/{gameId}/move",
 		GameMakeMove,
 	},
 	Route{

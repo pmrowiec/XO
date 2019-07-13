@@ -1,30 +1,33 @@
 package main
 
-import "fmt"
-
-func MakeMove(x int, y int, game *Game, playerId int) bool {
-	if !CanMove(x, y, game, playerId) {
-		return false
+func (game *Game) Move(x int, y int, playerId int) {
+	if !game.CanMove(x, y, playerId) {
+		return
 	}
-	game.GameBoard[x][y] = playerId
-	if CheckRow(x, game, playerId) {
-		return true
+	game.GameBoard[x][y] = game.Marks[playerId]
+	if game.CheckRow(x, playerId) {
+		game.SetWinner(playerId)
+		return
 	}
-	if CheckColumn(y, game, playerId) {
-		return true
+	if game.CheckColumn(y, playerId) {
+		game.SetWinner(playerId)
+		return
 	}
-	if x == y && CheckDiagonal(1, game, playerId) {
-		return true
+	if x == y && game.CheckDiagonal(1, playerId) {
+		game.SetWinner(playerId)
+		return
 	}
-	if x+y == (game.BoardSize-1) && CheckDiagonal(-1, game, playerId) {
-		return true
+	if x+y == (game.BoardSize-1) && game.CheckDiagonal(-1, playerId) {
+		game.SetWinner(playerId)
+		return
 	}
 	game.Moves++
-	SetNextPlayer(game)
-	return false
+	game.CheckDraw()
+	game.SetNextPlayer()
+	return
 }
 
-func CanMove(x int, y int, game *Game, playerId int) bool {
+func (game *Game) CanMove(x int, y int, playerId int) bool {
 	if game.Completed == true {
 		return false
 	}
@@ -34,7 +37,7 @@ func CanMove(x int, y int, game *Game, playerId int) bool {
 	if x >= game.BoardSize || x < 0 || y >= game.BoardSize || y < 0 {
 		return false
 	}
-	if game.GameBoard[x][y] != 0 {
+	if game.GameBoard[x][y] != "" {
 		return false
 	}
 	if game.Moves >= (game.BoardSize * game.BoardSize) {
@@ -43,43 +46,53 @@ func CanMove(x int, y int, game *Game, playerId int) bool {
 	return true
 }
 
-func SetNextPlayer(game *Game) {
+func (game *Game) SetNextPlayer() {
 	if game.Player1Id == game.NextPlayer {
 		game.NextPlayer = game.Player2Id
 	} else {
 		game.NextPlayer = game.Player1Id
 	}
-	fmt.Println(game.NextPlayer)
 }
 
-func CheckRow(x int, game *Game, playerId int) bool {
+func (game *Game) CheckRow(x int, playerId int) bool {
 	for i := 0; i < game.BoardSize; i++ {
-		if game.GameBoard[x][i] != playerId {
+		if game.GameBoard[x][i] != game.Marks[playerId] {
 			return false
 		}
 	}
 	return true
 }
 
-func CheckColumn(y int, game *Game, playerId int) bool {
+func (game *Game) CheckColumn(y int, playerId int) bool {
 	for i := 0; i < game.BoardSize; i++ {
-		if game.GameBoard[i][y] != playerId {
+		if game.GameBoard[i][y] != game.Marks[playerId] {
 			return false
 		}
 	}
 	return true
 }
 
-func CheckDiagonal(direction int, game *Game, playerId int) bool {
+func (game *Game) CheckDiagonal(direction int, playerId int) bool {
 	j := 0
 	if direction == -1 {
 		j = game.BoardSize - 1
 	}
 	for i := 0; i < game.BoardSize; i++ {
-		if game.GameBoard[i][j] != playerId {
+		if game.GameBoard[i][j] != game.Marks[playerId] {
 			return false
 		}
 		j = j + direction
 	}
 	return true
+}
+
+func (game *Game) SetWinner(playerId int) {
+	game.Winner = playerId
+	game.Completed = true
+}
+
+func (game *Game) CheckDraw() {
+	if game.Moves >= game.BoardSize*game.BoardSize {
+		game.Completed = true
+	}
 }
